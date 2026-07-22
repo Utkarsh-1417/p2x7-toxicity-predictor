@@ -80,10 +80,14 @@ def generate_pdf_report(smiles, compound_name, mol, pred_label, proba):
     pdf.set_font("Helvetica", size=11)
     pdf.multi_cell(0, 8, f"Compound Name: {compound_name or 'Not found in PubChem'}")
 
-    # Insert soft wrap points every 30 chars so multi_cell can break long SMILES strings safely
-    wrapped_smiles = " ".join([smiles[i:i+30] for i in range(0, len(smiles), 30)])
+    # Manually break the SMILES into fixed-width lines using cell() instead of multi_cell(),
+    # since multi_cell's auto word-wrap fails on strings with no spaces to break on.
     pdf.set_font("Helvetica", size=9)
-    pdf.multi_cell(0, 6, f"SMILES: {wrapped_smiles}")
+    chunk_size = 45
+    smiles_chunks = [smiles[i:i+chunk_size] for i in range(0, len(smiles), chunk_size)] or [""]
+    pdf.cell(0, 6, f"SMILES: {smiles_chunks[0]}", new_x="LMARGIN", new_y="NEXT")
+    for chunk in smiles_chunks[1:]:
+        pdf.cell(0, 6, "  " + chunk, new_x="LMARGIN", new_y="NEXT")
     pdf.set_font("Helvetica", size=11)
     pdf.ln(3)
     pdf.image(img_path, x=70, w=70)
