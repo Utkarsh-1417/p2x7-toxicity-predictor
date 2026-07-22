@@ -1,0 +1,11 @@
+streamlit
+rdkit
+joblib
+scikit-learn
+xgboost
+lightgbm
+catboost
+imbalanced-learn
+requests
+fpdf2
+gdown
