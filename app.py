@@ -167,21 +167,49 @@ def generate_batch_pdf_report(results_df):
 
 with st.sidebar:
     st.header("About P2X7")
-    st.markdown(
-        "**P2X7** is an ATP-gated ion channel receptor found on immune cells (like macrophages "
-        "and microglia) and several other tissue types. When activated by high extracellular ATP "
-        "(a signal often released by damaged or dying cells), it opens a pore that allows ion flux "
-        "into the cell."
-    )
-    st.markdown(
-        "**Toxicity link:** Sustained or excessive P2X7 activation is associated with "
-        "inflammatory and cell-death pathways — implicated in chronic inflammation, "
-        "neurodegeneration, and certain inflammatory diseases."
-    )
-    st.markdown(
-        "**What this model does:** predicts whether a compound is likely to be active at the "
-        "P2X7 receptor (IC50 ≤ 1000 nM), based on its molecular structure."
-    )
+
+    with st.expander("1. What is the P2X7 receptor? Where is it located?", expanded=True):
+        st.markdown(
+            "P2X7 is an **ATP-gated ion channel receptor** — it opens in response to high levels "
+            "of extracellular ATP, rather than the usual chemical neurotransmitters. It is expressed "
+            "mainly on **immune cells** (macrophages, microglia, dendritic cells, lymphocytes), and is "
+            "also found in the **central nervous system, skin, bone, and epithelial tissues**."
+        )
+
+    with st.expander("2. What is its role in the body?"):
+        st.markdown(
+            "Under normal conditions, P2X7 acts as a **danger sensor**. Healthy cells keep very "
+            "little ATP outside them, so a sudden rise in extracellular ATP (released by "
+            "stressed, damaged, or dying cells) signals injury or infection. P2X7 detects this "
+            "and triggers immune responses — including activation of the **inflammasome**, "
+            "release of inflammatory cytokines (like IL-1β), and immune cell signaling — as "
+            "part of the body's normal defense system."
+        )
+
+    with st.expander("3. How does P2X7 toxicity affect the body?"):
+        st.markdown(
+            "Problems arise when P2X7 is **activated too strongly or for too long**. This can "
+            "trigger excessive inflammation and a cell-death pathway, contributing to "
+            "**chronic inflammatory conditions, neurodegeneration (e.g. in Alzheimer's and "
+            "Parkinson's research), neuropathic pain, and tissue damage**. This dual nature — "
+            "essential defense signal vs. driver of harmful inflammation when overactive — "
+            "is why compounds affecting P2X7 need careful evaluation: a molecule that strongly "
+            "activates this receptor may carry a toxicity risk worth flagging early."
+        )
+
+    with st.expander("4. Basic principle of this model"):
+        st.markdown(
+            "The model doesn't run a lab experiment — it learns from **thousands of known "
+            "compounds** (from the BindingDB database) whose real, measured P2X7 activity "
+            "(IC50) is already known. Each molecule is converted into a set of numeric "
+            "**structural fingerprints and physicochemical properties** (size, lipophilicity, "
+            "ring structure, etc.), and an ensemble of machine learning models learns the "
+            "patterns that separate **active** compounds (IC50 ≤ 1000 nM) from **inactive** ones. "
+            "Given a *new* molecule's structure, the model estimates how similar its pattern is "
+            "to known active compounds, and outputs a probability of activity — a quick "
+            "computational screen, not a substitute for lab testing."
+        )
+
     st.divider()
     st.caption(f"Model: {config['final_model']}")
 
@@ -197,7 +225,29 @@ st.warning(
 tab1, tab2 = st.tabs(["Single Prediction", "Batch Prediction (CSV)"])
 
 with tab1:
-    smiles_input = st.text_input("Enter a SMILES string:", placeholder="e.g. CC(=O)Oc1ccccc1C(=O)O")
+    if 'smiles_input_value' not in st.session_state:
+        st.session_state['smiles_input_value'] = ""
+
+    st.markdown("**Try an example:**")
+    examples = {
+        "Aspirin": "CC(=O)Oc1ccccc1C(=O)O",
+        "Caffeine": "CN1C=NC2=C1C(=O)N(C(=O)N2C)C",
+        "Ibuprofen": "CC(C)Cc1ccc(cc1)C(C)C(=O)O",
+        "Paracetamol": "CC(=O)Nc1ccc(O)cc1",
+        "Propranolol": "CC(C)NCC(O)COc1cccc2ccccc12",
+    }
+    example_cols = st.columns(len(examples))
+    for col, (name, smi) in zip(example_cols, examples.items()):
+        with col:
+            if st.button(name, use_container_width=True):
+                st.session_state['smiles_input_value'] = smi
+
+    smiles_input = st.text_input(
+        "Enter a SMILES string:",
+        value=st.session_state['smiles_input_value'],
+        placeholder="e.g. CC(=O)Oc1ccccc1C(=O)O",
+        key="smiles_box_input"
+    )
     st.markdown(
         "🔗 Don't have a SMILES string? Look up your compound on "
         "[PubChem](https://pubchem.ncbi.nlm.nih.gov/) and copy its **Canonical SMILES** from the compound page."
