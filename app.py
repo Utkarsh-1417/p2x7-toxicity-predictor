@@ -195,15 +195,15 @@ with tab2:
 st.divider()
 st.markdown(
     "<div style='text-align: center;'>"
-    "<span style='font-size: 1.15em; background-color: #FFF3B0; padding: 4px 10px; border-radius: 6px;'>"
+    "<span style='font-size: 1.15em; font-weight: 600; color: #1a1a1a; background-color: #FFD54F; padding: 6px 14px; border-radius: 6px; display: inline-block;'>"
     "Built as a learning project at IIT (BHU) Varanasi under the AI in Drug Discovery Internship Program 2026"
     "</span>"
     "<br><br>"
-    "<span style='font-size: 1.1em; background-color: #C7F0DB; padding: 3px 8px; border-radius: 6px;'>"
+    "<span style='font-size: 1.1em; font-weight: 600; color: #1a1a1a; background-color: #81E6B4; padding: 5px 12px; border-radius: 6px; display: inline-block;'>"
     "Model Developed By: Ritul Kumari"
     "</span>"
     "<br><br>"
-    "<span style='font-size: 1.1em; background-color: #C7F0DB; padding: 3px 8px; border-radius: 6px;'>"
+    "<span style='font-size: 1.1em; font-weight: 600; color: #1a1a1a; background-color: #81E6B4; padding: 5px 12px; border-radius: 6px; display: inline-block;'>"
     "Web App Developed By: Utkarsh Kumar"
     "</span>"
     "</div>",
