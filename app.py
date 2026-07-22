@@ -100,6 +100,62 @@ def generate_pdf_report(smiles, compound_name, mol, pred_label, proba):
     pdf.cell(0, 5, "Model Developed By: Ritul Kumari  |  Web App Developed By: Utkarsh Kumar", new_x="LMARGIN", new_y="NEXT", align="C")
     return bytes(pdf.output())
 
+def generate_batch_pdf_report(results_df):
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_font("Helvetica", "B", 16)
+    pdf.cell(0, 10, "P2X7 Batch Prediction Report", new_x="LMARGIN", new_y="NEXT", align="C")
+    pdf.ln(2)
+    pdf.set_font("Helvetica", size=10)
+    pdf.cell(0, 6, f"Total compounds: {len(results_df)}", new_x="LMARGIN", new_y="NEXT")
+    pdf.ln(4)
+
+    col_widths = [70, 35, 30, 35]
+    headers = ["SMILES", "Compound Name", "Predicted", "Prob. Active"]
+
+    pdf.set_font("Helvetica", "B", 9)
+    pdf.set_fill_color(220, 220, 220)
+    for h, w in zip(headers, col_widths):
+        pdf.cell(w, 8, h, border=1, fill=True)
+    pdf.ln()
+
+    pdf.set_font("Helvetica", size=8)
+    for _, row in results_df.iterrows():
+        smi = str(row.get("smiles", ""))[:38]
+        name = str(row.get("compound_name", "") or "-")[:20]
+        pred = str(row.get("predicted_class", ""))
+        proba = row.get("probability_active", None)
+        proba_str = f"{proba:.1%}" if pd.notna(proba) else "-"
+
+        if pdf.get_y() > 270:
+            pdf.add_page()
+            pdf.set_font("Helvetica", "B", 9)
+            pdf.set_fill_color(220, 220, 220)
+            for h, w in zip(headers, col_widths):
+                pdf.cell(w, 8, h, border=1, fill=True)
+            pdf.ln()
+            pdf.set_font("Helvetica", size=8)
+
+        pdf.cell(col_widths[0], 7, smi, border=1)
+        pdf.cell(col_widths[1], 7, name, border=1)
+        pdf.cell(col_widths[2], 7, pred, border=1)
+        pdf.cell(col_widths[3], 7, proba_str, border=1)
+        pdf.ln()
+
+    pdf.ln(8)
+    pdf.set_font("Helvetica", "I", 8)
+    pdf.multi_cell(0, 5,
+        "Disclaimer: This model is intended for experimental and educational use only. "
+        "It is a screening tool and its predictions must not be used as a sole basis for "
+        "any real-world chemical, pharmacological, or safety decision."
+    )
+    pdf.ln(4)
+    pdf.set_font("Helvetica", size=7)
+    pdf.cell(0, 5, "Built as a learning project at IIT (BHU) Varanasi under the AI in Drug Discovery Internship Program 2026", new_x="LMARGIN", new_y="NEXT", align="C")
+    pdf.cell(0, 5, "Model Developed By: Ritul Kumari  |  Web App Developed By: Utkarsh Kumar", new_x="LMARGIN", new_y="NEXT", align="C")
+
+    return bytes(pdf.output())
+
 with st.sidebar:
     st.header("About P2X7")
     st.markdown(
@@ -190,7 +246,13 @@ with tab2:
             st.success(f"Done — {len(results_df)} molecules processed.")
             st.dataframe(results_df, use_container_width=True)
             csv_out = results_df.to_csv(index=False).encode('utf-8')
-            st.download_button("📥 Download results as CSV", data=csv_out, file_name="p2x7_predictions.csv", mime="text/csv")
+            batch_pdf_bytes = generate_batch_pdf_report(results_df)
+
+            dl_col1, dl_col2 = st.columns(2)
+            with dl_col1:
+                st.download_button("📥 Download results as CSV", data=csv_out, file_name="p2x7_predictions.csv", mime="text/csv", use_container_width=True)
+            with dl_col2:
+                st.download_button("📄 Download results as PDF", data=batch_pdf_bytes, file_name="p2x7_batch_report.pdf", mime="application/pdf", use_container_width=True)
 
 st.divider()
 st.markdown(
