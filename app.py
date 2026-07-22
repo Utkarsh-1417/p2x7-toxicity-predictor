@@ -194,9 +194,18 @@ with tab2:
 
 st.divider()
 st.markdown(
-    "<div style='text-align: center; color: gray; font-size: 0.9em;'>"
+    "<div style='text-align: center;'>"
+    "<span style='font-size: 1.15em; background-color: #FFF3B0; padding: 4px 10px; border-radius: 6px;'>"
     "Built as a learning project at IIT (BHU) Varanasi under the AI in Drug Discovery Internship Program 2026"
-    "<br>Model Developed By: Ritul Kumari &nbsp;|&nbsp; Web App Developed By: Utkarsh Kumar"
+    "</span>"
+    "<br><br>"
+    "<span style='font-size: 1.1em; background-color: #C7F0DB; padding: 3px 8px; border-radius: 6px;'>"
+    "Model Developed By: Ritul Kumari"
+    "</span>"
+    "<br><br>"
+    "<span style='font-size: 1.1em; background-color: #C7F0DB; padding: 3px 8px; border-radius: 6px;'>"
+    "Web App Developed By: Utkarsh Kumar"
+    "</span>"
     "</div>",
     unsafe_allow_html=True
 )
