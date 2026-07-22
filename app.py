@@ -79,7 +79,12 @@ def generate_pdf_report(smiles, compound_name, mol, pred_label, proba):
     pdf.ln(4)
     pdf.set_font("Helvetica", size=11)
     pdf.multi_cell(0, 8, f"Compound Name: {compound_name or 'Not found in PubChem'}")
-    pdf.multi_cell(0, 8, f"SMILES: {smiles}")
+
+    # Insert soft wrap points every 30 chars so multi_cell can break long SMILES strings safely
+    wrapped_smiles = " ".join([smiles[i:i+30] for i in range(0, len(smiles), 30)])
+    pdf.set_font("Helvetica", size=9)
+    pdf.multi_cell(0, 6, f"SMILES: {wrapped_smiles}")
+    pdf.set_font("Helvetica", size=11)
     pdf.ln(3)
     pdf.image(img_path, x=70, w=70)
     pdf.ln(5)
@@ -121,7 +126,7 @@ def generate_batch_pdf_report(results_df):
 
     pdf.set_font("Helvetica", size=8)
     for _, row in results_df.iterrows():
-        smi = str(row.get("smiles", ""))[:38]
+        smi = str(row.get("smiles", ""))[:35]
         name = str(row.get("compound_name", "") or "-")[:20]
         pred = str(row.get("predicted_class", ""))
         proba = row.get("probability_active", None)
