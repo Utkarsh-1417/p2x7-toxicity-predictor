@@ -72,16 +72,16 @@ def get_compound_name(smiles, timeout=8):
 def generate_pdf_report(smiles, compound_name, mol, pred_label, proba):
     img_path = "/tmp/mol_structure_report.png"
     Draw.MolToImage(mol, size=(350, 350)).save(img_path)
+
     pdf = FPDF()
     pdf.add_page()
     pdf.set_font("Helvetica", "B", 16)
     pdf.cell(0, 10, "P2X7 Activity Prediction Report", new_x="LMARGIN", new_y="NEXT", align="C")
     pdf.ln(4)
+
     pdf.set_font("Helvetica", size=11)
     pdf.multi_cell(0, 8, f"Compound Name: {compound_name or 'Not found in PubChem'}")
 
-    # Manually break the SMILES into fixed-width lines using cell() instead of multi_cell(),
-    # since multi_cell's auto word-wrap fails on strings with no spaces to break on.
     pdf.set_font("Helvetica", size=9)
     chunk_size = 45
     smiles_chunks = [smiles[i:i+chunk_size] for i in range(0, len(smiles), chunk_size)] or [""]
@@ -90,13 +90,16 @@ def generate_pdf_report(smiles, compound_name, mol, pred_label, proba):
         pdf.cell(0, 6, "  " + chunk, new_x="LMARGIN", new_y="NEXT")
     pdf.set_font("Helvetica", size=11)
     pdf.ln(3)
+
     pdf.image(img_path, x=70, w=70)
     pdf.ln(5)
+
     pdf.set_font("Helvetica", "B", 13)
     pdf.cell(0, 8, f"Predicted Class: {pred_label}", new_x="LMARGIN", new_y="NEXT")
     pdf.set_font("Helvetica", size=11)
     pdf.cell(0, 8, f"Probability of Active: {proba:.1%}", new_x="LMARGIN", new_y="NEXT")
     pdf.ln(6)
+
     pdf.set_font("Helvetica", "I", 9)
     pdf.multi_cell(0, 6,
         "Disclaimer: This model is intended for experimental and educational use only. "
@@ -104,9 +107,11 @@ def generate_pdf_report(smiles, compound_name, mol, pred_label, proba):
         "any real-world chemical, pharmacological, or safety decision."
     )
     pdf.ln(8)
+
     pdf.set_font("Helvetica", size=8)
     pdf.cell(0, 5, "Built as a learning project at IIT (BHU) Varanasi under the AI in Drug Discovery Internship Program 2026", new_x="LMARGIN", new_y="NEXT", align="C")
     pdf.cell(0, 5, "Model Developed By: Ritul Kumari  |  Web App Developed By: Utkarsh Kumar", new_x="LMARGIN", new_y="NEXT", align="C")
+
     return bytes(pdf.output())
 
 def generate_batch_pdf_report(results_df):
@@ -165,6 +170,7 @@ def generate_batch_pdf_report(results_df):
 
     return bytes(pdf.output())
 
+# --- Sidebar ---
 with st.sidebar:
     st.header("About P2X7")
 
@@ -224,9 +230,16 @@ st.warning(
 
 tab1, tab2 = st.tabs(["Single Prediction", "Batch Prediction (CSV)"])
 
+# ============== TAB 1: SINGLE PREDICTION ==============
 with tab1:
-    if 'smiles_input_value' not in st.session_state:
-        st.session_state['smiles_input_value'] = ""
+    if "smiles_box_input" not in st.session_state:
+        st.session_state["smiles_box_input"] = ""
+    if "single_result" not in st.session_state:
+        st.session_state["single_result"] = None
+
+    def set_example(smi):
+        st.session_state["smiles_box_input"] = smi
+        st.session_state["single_result"] = None
 
     st.markdown("**Try an example:**")
     examples = {
@@ -239,12 +252,10 @@ with tab1:
     example_cols = st.columns(len(examples))
     for col, (name, smi) in zip(example_cols, examples.items()):
         with col:
-            if st.button(name, use_container_width=True):
-                st.session_state['smiles_input_value'] = smi
+            st.button(name, use_container_width=True, on_click=set_example, args=(smi,))
 
     smiles_input = st.text_input(
         "Enter a SMILES string:",
-        value=st.session_state['smiles_input_value'],
         placeholder="e.g. CC(=O)Oc1ccccc1C(=O)O",
         key="smiles_box_input"
     )
@@ -252,38 +263,70 @@ with tab1:
         "🔗 Don't have a SMILES string? Look up your compound on "
         "[PubChem](https://pubchem.ncbi.nlm.nih.gov/) and copy its **Canonical SMILES** from the compound page."
     )
-    if smiles_input.strip():
-        X, mol = featurize(smiles_input.strip())
-        if X is None:
-            st.error("Invalid SMILES string — could not parse this molecule.")
-        else:
-            proba = model.predict_proba(X)[0, 1]
-            pred = int(proba >= 0.5)
-            pred_label = "Active (IC50 ≤ 1000 nM)" if pred == 1 else "Inactive (IC50 > 1000 nM)"
-            with st.spinner("Looking up compound name on PubChem..."):
-                compound_name = get_compound_name(smiles_input.strip())
-            col1, col2 = st.columns([1, 1])
-            with col1:
-                st.subheader("Structure")
-                st.image(Draw.MolToImage(mol, size=(300, 300)))
-                st.markdown(f"**Compound name:** {compound_name if compound_name else '_Not found in PubChem_'}")
-            with col2:
-                st.subheader("Prediction")
-                if pred == 1:
-                    st.success(f"**{pred_label}**")
-                else:
-                    st.info(f"**{pred_label}**")
-                st.metric("Probability of Active", f"{proba:.1%}")
-                st.progress(float(proba))
-                pdf_bytes = generate_pdf_report(smiles_input.strip(), compound_name, mol, pred_label, proba)
-                st.download_button("📄 Download PDF Report", data=pdf_bytes, file_name="p2x7_prediction_report.pdf", mime="application/pdf")
-    else:
-        st.info("Enter a SMILES string above to get started.")
 
+    predict_clicked = st.button("🔍 Predict", type="primary")
+
+    if predict_clicked:
+        if not smiles_input.strip():
+            st.warning("Please enter a SMILES string first.")
+            st.session_state["single_result"] = None
+        else:
+            X, mol = featurize(smiles_input.strip())
+            if X is None:
+                st.error("Invalid SMILES string — could not parse this molecule.")
+                st.session_state["single_result"] = None
+            else:
+                proba = model.predict_proba(X)[0, 1]
+                pred = int(proba >= 0.5)
+                pred_label = "Active (IC50 ≤ 1000 nM)" if pred == 1 else "Inactive (IC50 > 1000 nM)"
+                with st.spinner("Looking up compound name on PubChem..."):
+                    compound_name = get_compound_name(smiles_input.strip())
+                st.session_state["single_result"] = {
+                    "smiles": smiles_input.strip(),
+                    "mol": mol,
+                    "compound_name": compound_name,
+                    "pred_label": pred_label,
+                    "proba": proba,
+                }
+
+    result = st.session_state["single_result"]
+    if result is not None:
+        col1, col2 = st.columns([1, 1])
+        with col1:
+            st.subheader("Structure")
+            st.image(Draw.MolToImage(result["mol"], size=(300, 300)))
+            st.markdown(f"**Compound name:** {result['compound_name'] if result['compound_name'] else '_Not found in PubChem_'}")
+        with col2:
+            st.subheader("Prediction")
+            if "Active (" in result["pred_label"]:
+                st.success(f"**{result['pred_label']}**")
+            else:
+                st.info(f"**{result['pred_label']}**")
+            st.metric("Probability of Active", f"{result['proba']:.1%}")
+            st.progress(float(result["proba"]))
+
+            pdf_bytes = generate_pdf_report(result["smiles"], result["compound_name"], result["mol"], result["pred_label"], result["proba"])
+            single_csv = pd.DataFrame([{
+                "smiles": result["smiles"],
+                "compound_name": result["compound_name"],
+                "predicted_class": result["pred_label"],
+                "probability_active": round(float(result["proba"]), 4)
+            }]).to_csv(index=False).encode('utf-8')
+
+            dl_col1, dl_col2 = st.columns(2)
+            with dl_col1:
+                st.download_button("📄 Download PDF Report", data=pdf_bytes, file_name="p2x7_prediction_report.pdf", mime="application/pdf", use_container_width=True)
+            with dl_col2:
+                st.download_button("📊 Download CSV", data=single_csv, file_name="p2x7_prediction.csv", mime="text/csv", use_container_width=True)
+    elif not predict_clicked:
+        st.info("Enter a SMILES string (or pick an example) and click Predict.")
+
+# ============== TAB 2: BATCH PREDICTION ==============
 with tab2:
     st.markdown("Upload a CSV with a column named **`smiles`** to predict activity for many molecules at once.")
-    fetch_names = st.checkbox("Also fetch compound names from PubChem (slower)", value=False)
+    fetch_names = st.checkbox("Also fetch compound names from PubChem (slower — one lookup per row)", value=False)
     uploaded_file = st.file_uploader("Choose a CSV file", type="csv")
+
     if uploaded_file is not None:
         df_input = pd.read_csv(uploaded_file)
         if 'smiles' not in df_input.columns:
@@ -302,8 +345,10 @@ with tab2:
                         row = {"smiles": smi, "compound_name": name, "predicted_class": pred, "probability_active": round(float(proba), 4)}
                     results.append(row)
                 results_df = pd.DataFrame(results)
+
             st.success(f"Done — {len(results_df)} molecules processed.")
             st.dataframe(results_df, use_container_width=True)
+
             csv_out = results_df.to_csv(index=False).encode('utf-8')
             batch_pdf_bytes = generate_batch_pdf_report(results_df)
 
