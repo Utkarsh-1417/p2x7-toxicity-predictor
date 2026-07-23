@@ -93,12 +93,17 @@ def generate_pdf_report(smiles, compound_name, mol, pred_label, proba, conf_text
     pdf.set_font("Helvetica", size=11)
     pdf.multi_cell(0, 8, f"Compound Name: {compound_name or 'Not found in PubChem'}")
 
+    # Explicitly reset cursor to the left margin before the SMILES line,
+    # regardless of where multi_cell left it, to guarantee full-width wrapping.
+    pdf.set_xy(pdf.l_margin, pdf.get_y())
+
     pdf.set_font("Helvetica", size=9)
     chunk_size = 45
     smiles_chunks = [smiles[i:i+chunk_size] for i in range(0, len(smiles), chunk_size)] or [""]
-    pdf.cell(0, 6, f"SMILES: {smiles_chunks[0]}", new_x="LMARGIN", new_y="NEXT")
-    for chunk in smiles_chunks[1:]:
-        pdf.cell(0, 6, "  " + chunk, new_x="LMARGIN", new_y="NEXT")
+    for idx, chunk in enumerate(smiles_chunks):
+        pdf.set_xy(pdf.l_margin, pdf.get_y())
+        prefix = "SMILES: " if idx == 0 else "  "
+        pdf.cell(0, 6, prefix + chunk, new_x="LMARGIN", new_y="NEXT")
     pdf.set_font("Helvetica", size=11)
     pdf.ln(3)
 
