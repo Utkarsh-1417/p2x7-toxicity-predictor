@@ -7,6 +7,7 @@ import requests
 import urllib.parse
 import os
 import gdown
+from datetime import datetime
 from rdkit import Chem
 from rdkit.Chem import rdFingerprintGenerator, MACCSkeys, Draw
 from rdkit.ML.Descriptors import MoleculeDescriptors
@@ -69,7 +70,17 @@ def get_compound_name(smiles, timeout=8):
     except requests.exceptions.RequestException:
         return None
 
-def generate_pdf_report(smiles, compound_name, mol, pred_label, proba):
+def confidence_label(proba):
+    """Confidence based on distance from the 0.5 decision boundary."""
+    distance = abs(proba - 0.5)
+    if distance >= 0.35:
+        return "High confidence", "🟢"
+    elif distance >= 0.15:
+        return "Moderate confidence", "🟡"
+    else:
+        return "Low confidence (borderline)", "🔴"
+
+def generate_pdf_report(smiles, compound_name, mol, pred_label, proba, conf_text):
     img_path = "/tmp/mol_structure_report.png"
     Draw.MolToImage(mol, size=(350, 350)).save(img_path)
 
@@ -97,7 +108,8 @@ def generate_pdf_report(smiles, compound_name, mol, pred_label, proba):
     pdf.set_font("Helvetica", "B", 13)
     pdf.cell(0, 8, f"Predicted Class: {pred_label}", new_x="LMARGIN", new_y="NEXT")
     pdf.set_font("Helvetica", size=11)
-    pdf.cell(0, 8, f"Probability of Active: {proba:.1%}", new_x="LMARGIN", new_y="NEXT")
+    pdf.cell(0, 8, f"Probability Active: {proba:.1%}   |   Probability Inactive: {1-proba:.1%}", new_x="LMARGIN", new_y="NEXT")
+    pdf.cell(0, 8, f"Confidence: {conf_text}", new_x="LMARGIN", new_y="NEXT")
     pdf.ln(6)
 
     pdf.set_font("Helvetica", "I", 9)
@@ -124,36 +136,38 @@ def generate_batch_pdf_report(results_df):
     pdf.cell(0, 6, f"Total compounds: {len(results_df)}", new_x="LMARGIN", new_y="NEXT")
     pdf.ln(4)
 
-    col_widths = [70, 35, 30, 35]
-    headers = ["SMILES", "Compound Name", "Predicted", "Prob. Active"]
+    col_widths = [65, 30, 25, 28, 32]
+    headers = ["SMILES", "Compound", "Predicted", "Prob. Active", "Confidence"]
 
-    pdf.set_font("Helvetica", "B", 9)
+    pdf.set_font("Helvetica", "B", 8)
     pdf.set_fill_color(220, 220, 220)
     for h, w in zip(headers, col_widths):
         pdf.cell(w, 8, h, border=1, fill=True)
     pdf.ln()
 
-    pdf.set_font("Helvetica", size=8)
+    pdf.set_font("Helvetica", size=7)
     for _, row in results_df.iterrows():
-        smi = str(row.get("smiles", ""))[:35]
-        name = str(row.get("compound_name", "") or "-")[:20]
+        smi = str(row.get("smiles", ""))[:32]
+        name = str(row.get("compound_name", "") or "-")[:16]
         pred = str(row.get("predicted_class", ""))
         proba = row.get("probability_active", None)
         proba_str = f"{proba:.1%}" if pd.notna(proba) else "-"
+        conf = str(row.get("confidence", "-") or "-")[:18]
 
         if pdf.get_y() > 270:
             pdf.add_page()
-            pdf.set_font("Helvetica", "B", 9)
+            pdf.set_font("Helvetica", "B", 8)
             pdf.set_fill_color(220, 220, 220)
             for h, w in zip(headers, col_widths):
                 pdf.cell(w, 8, h, border=1, fill=True)
             pdf.ln()
-            pdf.set_font("Helvetica", size=8)
+            pdf.set_font("Helvetica", size=7)
 
         pdf.cell(col_widths[0], 7, smi, border=1)
         pdf.cell(col_widths[1], 7, name, border=1)
         pdf.cell(col_widths[2], 7, pred, border=1)
         pdf.cell(col_widths[3], 7, proba_str, border=1)
+        pdf.cell(col_widths[4], 7, conf, border=1)
         pdf.ln()
 
     pdf.ln(8)
@@ -169,6 +183,21 @@ def generate_batch_pdf_report(results_df):
     pdf.cell(0, 5, "Model Developed By: Ritul Kumari  |  Web App Developed By: Utkarsh Kumar", new_x="LMARGIN", new_y="NEXT", align="C")
 
     return bytes(pdf.output())
+
+# --- Session state for history ---
+if "history" not in st.session_state:
+    st.session_state["history"] = []
+
+def log_to_history(smiles, compound_name, pred_label, proba, conf_text):
+    st.session_state["history"].append({
+        "timestamp": datetime.now().strftime("%H:%M:%S"),
+        "smiles": smiles,
+        "compound_name": compound_name or "-",
+        "predicted_class": pred_label,
+        "probability_active": round(float(proba), 4),
+        "probability_inactive": round(float(1 - proba), 4),
+        "confidence": conf_text,
+    })
 
 # --- Sidebar ---
 with st.sidebar:
@@ -188,32 +217,26 @@ with st.sidebar:
             "little ATP outside them, so a sudden rise in extracellular ATP (released by "
             "stressed, damaged, or dying cells) signals injury or infection. P2X7 detects this "
             "and triggers immune responses — including activation of the **inflammasome**, "
-            "release of inflammatory cytokines (like IL-1β), and immune cell signaling — as "
-            "part of the body's normal defense system."
+            "release of inflammatory cytokines (like IL-1β), and immune cell signaling."
         )
 
     with st.expander("3. How does P2X7 toxicity affect the body?"):
         st.markdown(
             "Problems arise when P2X7 is **activated too strongly or for too long**. This can "
             "trigger excessive inflammation and a cell-death pathway, contributing to "
-            "**chronic inflammatory conditions, neurodegeneration (e.g. in Alzheimer's and "
-            "Parkinson's research), neuropathic pain, and tissue damage**. This dual nature — "
-            "essential defense signal vs. driver of harmful inflammation when overactive — "
-            "is why compounds affecting P2X7 need careful evaluation: a molecule that strongly "
-            "activates this receptor may carry a toxicity risk worth flagging early."
+            "**chronic inflammatory conditions, neurodegeneration, neuropathic pain, and tissue "
+            "damage**. This dual nature — essential defense signal vs. driver of harmful "
+            "inflammation when overactive — is why compounds affecting P2X7 need careful "
+            "evaluation."
         )
 
     with st.expander("4. Basic principle of this model"):
         st.markdown(
-            "The model doesn't run a lab experiment — it learns from **thousands of known "
-            "compounds** (from the BindingDB database) whose real, measured P2X7 activity "
-            "(IC50) is already known. Each molecule is converted into a set of numeric "
-            "**structural fingerprints and physicochemical properties** (size, lipophilicity, "
-            "ring structure, etc.), and an ensemble of machine learning models learns the "
-            "patterns that separate **active** compounds (IC50 ≤ 1000 nM) from **inactive** ones. "
-            "Given a *new* molecule's structure, the model estimates how similar its pattern is "
-            "to known active compounds, and outputs a probability of activity — a quick "
-            "computational screen, not a substitute for lab testing."
+            "The model learns from **thousands of known compounds** (BindingDB) whose real, "
+            "measured P2X7 activity (IC50) is known. Each molecule is converted into numeric "
+            "**structural fingerprints and physicochemical properties**, and an ensemble of "
+            "machine learning models learns the patterns separating **active** (IC50 ≤ 1000 nM) "
+            "from **inactive** compounds — outputting a probability, not a lab result."
         )
 
     st.divider()
@@ -228,7 +251,7 @@ st.warning(
     "experimentally with qualified professionals."
 )
 
-tab1, tab2 = st.tabs(["Single Prediction", "Batch Prediction (CSV)"])
+tab1, tab2, tab3 = st.tabs(["Single Prediction", "Batch Prediction (CSV)", f"History ({len(st.session_state['history'])})"])
 
 # ============== TAB 1: SINGLE PREDICTION ==============
 with tab1:
@@ -279,6 +302,7 @@ with tab1:
                 proba = model.predict_proba(X)[0, 1]
                 pred = int(proba >= 0.5)
                 pred_label = "Active (IC50 ≤ 1000 nM)" if pred == 1 else "Inactive (IC50 > 1000 nM)"
+                conf_text, conf_emoji = confidence_label(proba)
                 with st.spinner("Looking up compound name on PubChem..."):
                     compound_name = get_compound_name(smiles_input.strip())
                 st.session_state["single_result"] = {
@@ -287,7 +311,10 @@ with tab1:
                     "compound_name": compound_name,
                     "pred_label": pred_label,
                     "proba": proba,
+                    "conf_text": conf_text,
+                    "conf_emoji": conf_emoji,
                 }
+                log_to_history(smiles_input.strip(), compound_name, pred_label, proba, conf_text)
 
     result = st.session_state["single_result"]
     if result is not None:
@@ -302,15 +329,24 @@ with tab1:
                 st.success(f"**{result['pred_label']}**")
             else:
                 st.info(f"**{result['pred_label']}**")
-            st.metric("Probability of Active", f"{result['proba']:.1%}")
-            st.progress(float(result["proba"]))
 
-            pdf_bytes = generate_pdf_report(result["smiles"], result["compound_name"], result["mol"], result["pred_label"], result["proba"])
+            m1, m2 = st.columns(2)
+            with m1:
+                st.metric("Probability Active", f"{result['proba']:.1%}")
+            with m2:
+                st.metric("Probability Inactive", f"{1 - result['proba']:.1%}")
+
+            st.progress(float(result["proba"]))
+            st.markdown(f"**Confidence:** {result['conf_emoji']} {result['conf_text']}")
+
+            pdf_bytes = generate_pdf_report(result["smiles"], result["compound_name"], result["mol"], result["pred_label"], result["proba"], result["conf_text"])
             single_csv = pd.DataFrame([{
                 "smiles": result["smiles"],
                 "compound_name": result["compound_name"],
                 "predicted_class": result["pred_label"],
-                "probability_active": round(float(result["proba"]), 4)
+                "probability_active": round(float(result["proba"]), 4),
+                "probability_inactive": round(float(1 - result["proba"]), 4),
+                "confidence": result["conf_text"],
             }]).to_csv(index=False).encode('utf-8')
 
             dl_col1, dl_col2 = st.columns(2)
@@ -324,7 +360,7 @@ with tab1:
 # ============== TAB 2: BATCH PREDICTION ==============
 with tab2:
     st.markdown("Upload a CSV with a column named **`smiles`** to predict activity for many molecules at once.")
-    fetch_names = st.checkbox("Also fetch compound names from PubChem (slower — one lookup per row)", value=False)
+    fetch_names = st.checkbox("Also fetch compound names from PubChem (slower)", value=False)
     uploaded_file = st.file_uploader("Choose a CSV file", type="csv")
 
     if uploaded_file is not None:
@@ -337,12 +373,14 @@ with tab2:
                 for smi in df_input['smiles']:
                     X, mol = featurize(str(smi))
                     if X is None:
-                        row = {"smiles": smi, "compound_name": None, "predicted_class": "Invalid SMILES", "probability_active": None}
+                        row = {"smiles": smi, "compound_name": None, "predicted_class": "Invalid SMILES", "probability_active": None, "confidence": None}
                     else:
                         proba = model.predict_proba(X)[0, 1]
                         pred = "Active" if proba >= 0.5 else "Inactive"
+                        conf_text, _ = confidence_label(proba)
                         name = get_compound_name(str(smi)) if fetch_names else None
-                        row = {"smiles": smi, "compound_name": name, "predicted_class": pred, "probability_active": round(float(proba), 4)}
+                        row = {"smiles": smi, "compound_name": name, "predicted_class": pred, "probability_active": round(float(proba), 4), "confidence": conf_text}
+                        log_to_history(str(smi), name, pred, proba, conf_text)
                     results.append(row)
                 results_df = pd.DataFrame(results)
 
@@ -357,6 +395,25 @@ with tab2:
                 st.download_button("📥 Download results as CSV", data=csv_out, file_name="p2x7_predictions.csv", mime="text/csv", use_container_width=True)
             with dl_col2:
                 st.download_button("📄 Download results as PDF", data=batch_pdf_bytes, file_name="p2x7_batch_report.pdf", mime="application/pdf", use_container_width=True)
+
+# ============== TAB 3: PREDICTION HISTORY ==============
+with tab3:
+    st.markdown("All predictions made during this session (single + batch). History clears when the app restarts or tab closes.")
+
+    if len(st.session_state["history"]) == 0:
+        st.info("No predictions yet this session. Try one in the Single Prediction or Batch Prediction tab.")
+    else:
+        history_df = pd.DataFrame(st.session_state["history"])
+        st.dataframe(history_df, use_container_width=True)
+
+        hist_col1, hist_col2 = st.columns([1, 1])
+        with hist_col1:
+            hist_csv = history_df.to_csv(index=False).encode('utf-8')
+            st.download_button("📥 Download full history as CSV", data=hist_csv, file_name="p2x7_session_history.csv", mime="text/csv", use_container_width=True)
+        with hist_col2:
+            if st.button("🗑️ Clear history", use_container_width=True):
+                st.session_state["history"] = []
+                st.rerun()
 
 st.divider()
 st.markdown(
